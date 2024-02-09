@@ -1,12 +1,14 @@
 ### Project Specific ###
 wandb
-slurm_log*
+slurm*
 saved_models
 data
 graphs
 *.sif
 sweeps
 test_*.sh
+spacecast-env
+*.html
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
@@ -47,6 +49,9 @@ share/python-wheels/
 
 # mkdocs documentation
 /site
+
+# Jupyter
+.ipynb_checkpoints
 
 ### Vim ###
 # Swap

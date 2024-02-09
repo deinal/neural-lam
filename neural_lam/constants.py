@@ -1,15 +1,91 @@
 # Third-party
-import cartopy
 import numpy as np
 
-WANDB_PROJECT = "neural-lam"
+WANDB_PROJECT = "spacecast-alpha"
 
-SECONDS_IN_YEAR = (
-    365 * 24 * 60 * 60
-)  # Assuming no leap years in dataset (2024 is next)
+# Variable names
+PARAM_NAMES = [
+    "B",
+    "Bx",
+    "By",
+    "Bz",
+    "E",
+    "Ex",
+    "Ey",
+    "Ez",
+    "v",
+    "vx",
+    "vy",
+    "vz",
+    "rho",
+    "pressure",
+    "temperature",
+    "agyrotropy",
+    "anisotropy",
+    "reconnection",
+]
+
+PARAM_NAMES_SHORT = [
+    "B",
+    "Bx",
+    "By",
+    "Bz",
+    "E",
+    "Ex",
+    "Ey",
+    "Ez",
+    "v",
+    "vx",
+    "vy",
+    "vz",
+    "rho",
+    "pressure",
+    "temperature",
+    "agyrotropy",
+    "anisotropy",
+    "reconnection",
+]
+
+PARAM_UNITS = [
+    "T",
+    "T",
+    "T",
+    "T",
+    "V/m",
+    "V/m",
+    "V/m",
+    "V/m",
+    "km/s",
+    "km/s",
+    "km/s",
+    "km/s",
+    "1/cm³",
+    "Pa",
+    "K",
+    "-",
+    "-",
+    "-",
+]
+
+# Projection and grid
+# Hard coded for now, but should eventually be part of dataset desc. files
+GRID_SHAPE = (428, 642)  # (y, x)
+
+GRID_LIMITS = [-20, 10, -10, 10]
+
+# Data dimensions
+GRID_STATE_DIM = 18
+
+# Sample lengths
+SAMPLE_LEN = {
+    "train": 5,
+    "val": 5,
+    "test": 32,
+}
+
 
 # Log prediction error for these lead times
-VAL_STEP_LOG_ERRORS = np.array([1, 2, 3, 5, 10, 15, 19])
+VAL_STEP_LOG_ERRORS = np.array([1, 2, 3])
 
 # Log these metrics to wandb as scalar values for
 # specific variables and lead times
@@ -19,103 +95,7 @@ METRICS_WATCH = []
 # Format is a dictionary that maps from a variable index to
 # a list of lead time steps
 VAR_LEADS_METRICS_WATCH = {
-    6: [2, 19],  # t_2
-    14: [2, 19],  # wvint_0
-    15: [2, 19],  # z_1000
+    PARAM_NAMES.index("B"): [1, 2, 3],
+    PARAM_NAMES.index("E"): [1, 2, 3],
+    PARAM_NAMES.index("v"): [1, 2, 3],
 }
-
-# Variable names
-PARAM_NAMES = [
-    "pres_heightAboveGround_0_instant",
-    "pres_heightAboveSea_0_instant",
-    "nlwrs_heightAboveGround_0_accum",
-    "nswrs_heightAboveGround_0_accum",
-    "r_heightAboveGround_2_instant",
-    "r_hybrid_65_instant",
-    "t_heightAboveGround_2_instant",
-    "t_hybrid_65_instant",
-    "t_isobaricInhPa_500_instant",
-    "t_isobaricInhPa_850_instant",
-    "u_hybrid_65_instant",
-    "u_isobaricInhPa_850_instant",
-    "v_hybrid_65_instant",
-    "v_isobaricInhPa_850_instant",
-    "wvint_entireAtmosphere_0_instant",
-    "z_isobaricInhPa_1000_instant",
-    "z_isobaricInhPa_500_instant",
-]
-
-PARAM_NAMES_SHORT = [
-    "pres_0g",
-    "pres_0s",
-    "nlwrs_0",
-    "nswrs_0",
-    "r_2",
-    "r_65",
-    "t_2",
-    "t_65",
-    "t_500",
-    "t_850",
-    "u_65",
-    "u_850",
-    "v_65",
-    "v_850",
-    "wvint_0",
-    "z_1000",
-    "z_500",
-]
-PARAM_UNITS = [
-    "Pa",
-    "Pa",
-    "W/m\\textsuperscript{2}",
-    "W/m\\textsuperscript{2}",
-    "-",  # unitless
-    "-",
-    "K",
-    "K",
-    "K",
-    "K",
-    "m/s",
-    "m/s",
-    "m/s",
-    "m/s",
-    "kg/m\\textsuperscript{2}",
-    "m\\textsuperscript{2}/s\\textsuperscript{2}",
-    "m\\textsuperscript{2}/s\\textsuperscript{2}",
-]
-
-# Projection and grid
-# Hard coded for now, but should eventually be part of dataset desc. files
-GRID_SHAPE = (268, 238)  # (y, x)
-
-LAMBERT_PROJ_PARAMS = {
-    "a": 6367470,
-    "b": 6367470,
-    "lat_0": 63.3,
-    "lat_1": 63.3,
-    "lat_2": 63.3,
-    "lon_0": 15.0,
-    "proj": "lcc",
-}
-
-GRID_LIMITS = [  # In projection
-    -1059506.5523409774,  # min x
-    1310493.4476590226,  # max x
-    -1331732.4471934352,  # min y
-    1338267.5528065648,  # max y
-]
-
-# Create projection
-LAMBERT_PROJ = cartopy.crs.LambertConformal(
-    central_longitude=LAMBERT_PROJ_PARAMS["lon_0"],
-    central_latitude=LAMBERT_PROJ_PARAMS["lat_0"],
-    standard_parallels=(
-        LAMBERT_PROJ_PARAMS["lat_1"],
-        LAMBERT_PROJ_PARAMS["lat_2"],
-    ),
-)
-
-# Data dimensions
-BATCH_STATIC_FEATURE_DIM = 1  # Only open water
-GRID_FORCING_DIM = 5 * 3  # 5 features for 3 time-step window
-GRID_STATE_DIM = 17

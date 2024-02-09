@@ -86,11 +86,11 @@ An overview of how the different scripts and files depend on each other is given
 <p align="middle">
   <img src="figures/component_dependencies.png"/>
 </p>
-In order to start training models at least three pre-processing scripts have to be ran:
+In order to start training models at least three pre-processing scripts must be run:
 
+* `create_parameter_weights.py`
 * `create_mesh.py`
 * `create_grid_features.py`
-* `create_parameter_weights.py`
 
 ### Create graph
 Run `create_mesh.py` with suitable options to generate the graph you want to use (see `python create_mesh.py --help` for a list of options).

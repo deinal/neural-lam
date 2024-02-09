@@ -34,9 +34,9 @@ def main():
     parser.add_argument(
         "--dataset",
         type=str,
-        default="meps_example",
+        default="space_weather",
         help="Dataset, corresponding to name in data directory "
-        "(default: meps_example)",
+        "(default: space_weather)",
     )
     parser.add_argument(
         "--model",
@@ -92,9 +92,9 @@ def main():
     parser.add_argument(
         "--graph",
         type=str,
-        default="multiscale",
+        default="hierarchical",
         help="Graph to load and use in graph-based model "
-        "(default: multiscale)",
+        "(default: hierarchical)",
     )
     parser.add_argument(
         "--hidden_dim",
@@ -135,7 +135,7 @@ def main():
         "--ar_steps",
         type=int,
         default=1,
-        help="Number of steps to unroll prediction for in loss (1-19) "
+        help="Number of steps to unroll prediction for in loss (1-3) "
         "(default: 1)",
     )
     parser.add_argument(
@@ -154,9 +154,9 @@ def main():
     parser.add_argument(
         "--step_length",
         type=int,
-        default=3,
-        help="Step length in hours to consider single time step 1-3 "
-        "(default: 3)",
+        default=1,
+        help="Step length in minutes to consider single time step 1-3 "
+        "(default: 1)",
     )
     parser.add_argument(
         "--lr", type=float, default=1e-3, help="learning rate (default: 0.001)"
@@ -214,11 +214,11 @@ def main():
         shuffle=True,
         num_workers=args.n_workers,
     )
-    max_pred_length = (65 // args.step_length) - 2  # 19
+    val_pred_length = (constants.SAMPLE_LEN["val"] // args.step_length) - 2
     val_loader = torch.utils.data.DataLoader(
         WeatherDataset(
             args.dataset,
-            pred_length=max_pred_length,
+            pred_length=val_pred_length,
             split="val",
             subsample_step=args.step_length,
             subset=bool(args.subset_ds),
@@ -286,10 +286,13 @@ def main():
         if args.eval == "val":
             eval_loader = val_loader
         else:  # Test
+            test_pred_length = (
+                constants.SAMPLE_LEN["test"] // args.step_length
+            ) - 2
             eval_loader = torch.utils.data.DataLoader(
                 WeatherDataset(
                     args.dataset,
-                    pred_length=max_pred_length,
+                    pred_length=test_pred_length,
                     split="test",
                     subsample_step=args.step_length,
                     subset=bool(args.subset_ds),

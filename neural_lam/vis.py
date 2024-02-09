@@ -1,5 +1,6 @@
 # Third-party
 import matplotlib
+import matplotlib.patches as mp
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -36,16 +37,18 @@ def plot_error_map(errors, title=None, step_length=3):
     # ax and labels
     for (j, i), error in np.ndenumerate(errors_np):
         # Numbers > 9999 will be too large to fit
-        formatted_error = f"{error:.3f}" if error < 9999 else f"{error:.2E}"
+        formatted_error = (
+            f"{error:.3f}" if 0.001 < error < 9999 else f"{error:.2E}"
+        )
         ax.text(i, j, formatted_error, ha="center", va="center", usetex=False)
 
     # Ticks and labels
     label_size = 15
     ax.set_xticks(np.arange(pred_steps))
     pred_hor_i = np.arange(pred_steps) + 1  # Prediction horiz. in index
-    pred_hor_h = step_length * pred_hor_i  # Prediction horiz. in hours
+    pred_hor_h = step_length * pred_hor_i  # Prediction horiz. in minutes
     ax.set_xticklabels(pred_hor_h, size=label_size)
-    ax.set_xlabel("Lead time (h)", size=label_size)
+    ax.set_xlabel("Lead time (min)", size=label_size)
 
     ax.set_yticks(np.arange(d_f))
     y_ticklabels = [
@@ -75,19 +78,17 @@ def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
     else:
         vmin, vmax = vrange
 
-    # Set up masking of border region
+    # Set up masking of earth
     mask_reshaped = obs_mask.reshape(*constants.GRID_SHAPE)
-    pixel_alpha = (
-        mask_reshaped.clamp(0.7, 1).cpu().numpy()
-    )  # Faded border region
+    pixel_alpha = mask_reshaped.cpu().numpy()
 
-    fig, axes = plt.subplots(
-        1, 2, figsize=(13, 7), subplot_kw={"projection": constants.LAMBERT_PROJ}
-    )
+    fig, axes = plt.subplots(1, 2, figsize=(17, 7))
+
+    for ax in axes:
+        ax.set_facecolor("white")
 
     # Plot pred and target
     for ax, data in zip(axes, (target, pred)):
-        ax.coastlines()  # Add coastline outlines
         data_grid = data.reshape(*constants.GRID_SHAPE).cpu().numpy()
         im = ax.imshow(
             data_grid,
@@ -96,13 +97,23 @@ def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
             alpha=pixel_alpha,
             vmin=vmin,
             vmax=vmax,
-            cmap="plasma",
+            cmap="viridis",
         )
+
+        # Plot inner magnetosphere boundary
+        earth_circle = mp.Circle(
+            (0, 0), 4.55, color="black", fill=False, linewidth=1.5
+        )
+        ax.add_patch(earth_circle)
 
     # Ticks and labels
     axes[0].set_title("Ground Truth", size=15)
     axes[1].set_title("Prediction", size=15)
-    cbar = fig.colorbar(im, aspect=30)
+    axes[0].set_xlabel(r"$x\ (R_E)$", size=10)
+    axes[0].set_ylabel(r"$z\ (R_E)$", size=10)
+    axes[1].set_xlabel(r"$x\ (R_E)$", size=10)
+    axes[1].set_ylabel(r"$z\ (R_E)$", size=10)
+    cbar = fig.colorbar(im, aspect=20)
     cbar.ax.tick_params(labelsize=10)
 
     if title:
@@ -124,17 +135,14 @@ def plot_spatial_error(error, obs_mask, title=None, vrange=None):
     else:
         vmin, vmax = vrange
 
-    # Set up masking of border region
+    # Set up masking of earth
     mask_reshaped = obs_mask.reshape(*constants.GRID_SHAPE)
-    pixel_alpha = (
-        mask_reshaped.clamp(0.7, 1).cpu().numpy()
-    )  # Faded border region
+    pixel_alpha = mask_reshaped.cpu().numpy()
 
-    fig, ax = plt.subplots(
-        figsize=(5, 4.8), subplot_kw={"projection": constants.LAMBERT_PROJ}
-    )
+    fig, ax = plt.subplots(figsize=(8, 4.8))
 
-    ax.coastlines()  # Add coastline outlines
+    ax.set_facecolor("white")
+
     error_grid = error.reshape(*constants.GRID_SHAPE).cpu().numpy()
 
     im = ax.imshow(
@@ -147,8 +155,15 @@ def plot_spatial_error(error, obs_mask, title=None, vrange=None):
         cmap="OrRd",
     )
 
+    earth_circle = mp.Circle(
+        (0, 0), 4.55, color="black", fill=False, linewidth=1.25
+    )
+    ax.add_patch(earth_circle)
+
     # Ticks and labels
-    cbar = fig.colorbar(im, aspect=30)
+    ax.set_xlabel(r"$x\ (R_E)$", size=10)
+    ax.set_ylabel(r"$z\ (R_E)$", size=10)
+    cbar = fig.colorbar(im, aspect=20)
     cbar.ax.tick_params(labelsize=10)
     cbar.ax.yaxis.get_offset_text().set_fontsize(10)
     cbar.formatter.set_powerlimits((-3, 3))

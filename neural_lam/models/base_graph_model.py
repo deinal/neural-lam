@@ -98,15 +98,11 @@ class BaseGraphModel(ARModel):
         """
         raise NotImplementedError("process_step not implemented")
 
-    def predict_step(
-        self, prev_state, prev_prev_state, batch_static_features, forcing
-    ):
+    def predict_step(self, prev_state, prev_prev_state):
         """
         Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
         prev_state: (B, num_grid_nodes, feature_dim), X_t
         prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
-        batch_static_features: (B, num_grid_nodes, batch_static_feature_dim)
-        forcing: (B, num_grid_nodes, forcing_dim)
         """
         batch_size = prev_state.shape[0]
 
@@ -115,8 +111,6 @@ class BaseGraphModel(ARModel):
             (
                 prev_state,
                 prev_prev_state,
-                batch_static_features,
-                forcing,
                 self.expand_to_batch(self.grid_static_features, batch_size),
             ),
             dim=-1,

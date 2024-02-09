@@ -15,8 +15,8 @@ def main():
     parser.add_argument(
         "--dataset",
         type=str,
-        default="meps_example",
-        help="Dataset to compute weights for (default: meps_example)",
+        default="space_weather",
+        help="Dataset to compute weights for (default: space_weather)",
     )
     args = parser.parse_args()
 
@@ -39,17 +39,17 @@ def main():
     # Rescale geopotential to [0,1]
     geopotential = (geopotential - gp_min) / (gp_max - gp_min)  # (N_grid, 1)
 
-    grid_border_mask = torch.tensor(
-        np.load(os.path.join(static_dir_path, "border_mask.npy")),
+    grid_earth_mask = torch.tensor(
+        np.load(os.path.join(static_dir_path, "earth_mask.npy")),
         dtype=torch.int64,
     )  # (N_x, N_y)
-    grid_border_mask = (
-        grid_border_mask.flatten(0, 1).to(torch.float).unsqueeze(1)
+    grid_earth_mask = (
+        grid_earth_mask.flatten(0, 1).to(torch.float).unsqueeze(1)
     )  # (N_grid, 1)
 
     # Concatenate grid features
     grid_features = torch.cat(
-        (grid_xy, geopotential, grid_border_mask), dim=1
+        (grid_xy, geopotential, grid_earth_mask), dim=1
     )  # (N_grid, 4)
 
     torch.save(grid_features, os.path.join(static_dir_path, "grid_features.pt"))

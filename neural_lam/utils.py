@@ -25,14 +25,9 @@ def load_dataset_stats(dataset_name, device="cpu"):
     data_mean = loads_file("parameter_mean.pt")  # (d_features,)
     data_std = loads_file("parameter_std.pt")  # (d_features,)
 
-    flux_stats = loads_file("flux_stats.pt")  # (2,)
-    flux_mean, flux_std = flux_stats
-
     return {
         "data_mean": data_mean,
         "data_std": data_std,
-        "flux_mean": flux_mean,
-        "flux_std": flux_std,
     }
 
 
@@ -47,16 +42,16 @@ def load_static_data(dataset_name, device="cpu"):
             os.path.join(static_dir_path, fn), map_location=device
         )
 
-    # Load border mask, 1. if node is part of border, else 0.
-    border_mask_np = np.load(os.path.join(static_dir_path, "border_mask.npy"))
-    border_mask = (
-        torch.tensor(border_mask_np, dtype=torch.float32, device=device)
+    # Load earth mask, 1. if node is part of earth, else 0.
+    earth_mask_np = np.load(os.path.join(static_dir_path, "earth_mask.npy"))
+    earth_mask = (
+        torch.tensor(earth_mask_np, dtype=torch.float32, device=device)
         .flatten(0, 1)
         .unsqueeze(1)
     )  # (N_grid, 1)
 
-    grid_static_features = loads_file(
-        "grid_features.pt"
+    grid_static_features = loads_file("grid_features.pt").to(
+        torch.float32
     )  # (N_grid, d_grid_static)
 
     # Load step diff stats
@@ -75,7 +70,7 @@ def load_static_data(dataset_name, device="cpu"):
     )  # (d_f,)
 
     return {
-        "border_mask": border_mask,
+        "earth_mask": earth_mask,
         "grid_static_features": grid_static_features,
         "step_diff_mean": step_diff_mean,
         "step_diff_std": step_diff_std,
@@ -253,7 +248,7 @@ def fractional_plot_bundle(fraction):
     Get the tueplots bundle, but with figure width as a fraction of
     the page width.
     """
-    bundle = bundles.neurips2023(usetex=True, family="serif")
+    bundle = bundles.neurips2023(usetex=False, family="serif")
     bundle.update(figsizes.neurips2023())
     original_figsize = bundle["figure.figsize"]
     bundle["figure.figsize"] = (
