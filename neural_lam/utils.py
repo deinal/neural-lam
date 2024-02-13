@@ -25,6 +25,10 @@ def load_dataset_stats(dataset_name, device="cpu"):
     data_mean = loads_file("parameter_mean.pt")  # (d_features,)
     data_std = loads_file("parameter_std.pt")  # (d_features,)
 
+    for index in constants.BINARY_INDICES:
+        data_mean[index] = 0
+        data_std[index] = 1
+
     return {
         "data_mean": data_mean,
         "data_std": data_std,
@@ -61,6 +65,10 @@ def load_static_data(dataset_name, device="cpu"):
     # Load parameter std for computing validation errors in original data scale
     data_mean = loads_file("parameter_mean.pt")  # (d_features,)
     data_std = loads_file("parameter_std.pt")  # (d_features,)
+
+    for index in constants.BINARY_INDICES:
+        data_mean[index] = 0
+        data_std[index] = 1
 
     # Load loss weighting vectors
     param_weights = torch.tensor(

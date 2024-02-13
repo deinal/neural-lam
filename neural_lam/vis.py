@@ -46,9 +46,9 @@ def plot_error_map(errors, title=None, step_length=3):
     label_size = 15
     ax.set_xticks(np.arange(pred_steps))
     pred_hor_i = np.arange(pred_steps) + 1  # Prediction horiz. in index
-    pred_hor_h = step_length * pred_hor_i  # Prediction horiz. in minutes
+    pred_hor_h = step_length * pred_hor_i  # Prediction horiz. in steps
     ax.set_xticklabels(pred_hor_h, size=label_size)
-    ax.set_xlabel("Lead time (min)", size=label_size)
+    ax.set_xlabel("Step", size=label_size)
 
     ax.set_yticks(np.arange(d_f))
     y_ticklabels = [

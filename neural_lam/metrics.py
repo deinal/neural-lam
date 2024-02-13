@@ -263,6 +263,74 @@ def crps_gauss(
     )
 
 
+def bce(
+    pred, target, pred_std=None, mask=None, average_grid=True, sum_vars=True
+):
+    """
+    Binary Cross-Entropy Loss
+
+    pred: (..., N, d_state), prediction logits
+    target: (..., N, d_state), target binary labels
+    pred_std: Unused here, but kept for consistent API
+    mask: (N,), boolean mask describing which grid nodes to use in metric
+    average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
+    sum_vars: boolean, if variable dimension -1 should be reduced (sum
+        over d_state)
+
+    Returns:
+    metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
+    depending on reduction arguments.
+    """
+    pred_std = torch.ones_like(pred_std)
+
+    entry_bce = torch.nn.functional.binary_cross_entropy(
+        pred, target, target, reduction="none"
+    )  # (..., N, d_state)
+
+    return mask_and_reduce_metric(
+        entry_bce, mask=mask, average_grid=average_grid, sum_vars=sum_vars
+    )
+
+
+def bce_dice(
+    pred, target, pred_std=None, mask=None, average_grid=True, sum_vars=True
+):
+    """
+    Combined Binary Cross-Entropy and Dice loss
+
+    pred: (..., N, d_state), prediction logits
+    target: (..., N, d_state), target binary labels
+    pred_std: Unused here, but kept for consistent API
+    mask: (N,), boolean mask describing which grid nodes to use in metric
+    average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
+    sum_vars: boolean, if variable dimension -1 should be reduced (sum
+        over d_state)
+
+    Returns:
+    metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
+    depending on reduction arguments.
+    """
+    pred_std = torch.ones_like(pred_std)
+
+    bce_loss = torch.nn.functional.binary_cross_entropy(
+        pred, target, reduction="none"
+    )
+
+    pred_flat = pred.view(-1)
+    target_flat = target.view(-1)
+    intersection = (pred_flat * target_flat).sum()
+    dice_loss = 1 - (2.0 * intersection) / (pred_flat.sum() + target_flat.sum())
+
+    entry_bce_dice = bce_loss + dice_loss
+
+    return mask_and_reduce_metric(
+        entry_bce_dice,
+        mask=mask,
+        average_grid=average_grid,
+        sum_vars=sum_vars,
+    )
+
+
 DEFINED_METRICS = {
     "mse": mse,
     "mae": mae,
@@ -271,4 +339,6 @@ DEFINED_METRICS = {
     "wmae": wmae,
     "nll": nll,
     "crps_gauss": crps_gauss,
+    "bce": bce,
+    "bce_dice": bce_dice,
 }

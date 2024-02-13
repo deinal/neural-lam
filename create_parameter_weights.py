@@ -13,11 +13,11 @@ from neural_lam import constants
 from neural_lam.weather_dataset import WeatherDataset
 
 
-def calculate_static_features(data, rho_feature_index, output_dir):
+def calculate_static_features(data, output_dir):
     """
     Calculates static features based on the input data and saves them.
     """
-    earth_mask = data[0, :, :, rho_feature_index] == 0
+    earth_mask = data[0, :, :, constants.PARAM_NAMES.index("rho")] == 0
     np.save(Path(output_dir, "earth_mask.npy"), earth_mask)
 
     y_indices, x_indices = np.indices(earth_mask.shape)
@@ -74,9 +74,7 @@ def main():
     train_samples_dir_path = Path("data", args.dataset, "samples", "train")
     file_paths = sorted(train_samples_dir_path.glob("*.npy"))
     data = np.load(next(iter(file_paths)))
-    calculate_static_features(
-        data, constants.PARAM_NAMES.index("rho"), static_dir_path
-    )
+    calculate_static_features(data, static_dir_path)
 
     # Load dataset without any subsampling
     ds = WeatherDataset(

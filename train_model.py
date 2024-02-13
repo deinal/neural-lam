@@ -152,6 +152,12 @@ def main():
         help="Loss function to use, see metric.py (default: wmse)",
     )
     parser.add_argument(
+        "--binary_loss",
+        type=str,
+        default="bce_dice",
+        help="Loss function to use, see metric.py (default: bce_dice)",
+    )
+    parser.add_argument(
         "--step_length",
         type=int,
         default=1,

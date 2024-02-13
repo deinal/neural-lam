@@ -55,16 +55,26 @@ PARAM_UNITS = [
     "V/m",
     "V/m",
     "V/m",
-    "km/s",
-    "km/s",
-    "km/s",
-    "km/s",
-    "1/cm³",
+    "m/s",
+    "m/s",
+    "m/s",
+    "m/s",
+    "1/m³",
     "Pa",
     "K",
     "-",
     "-",
     "-",
+]
+
+# Define binary variables
+BINARY_PARAMS = [
+    "reconnection",
+]
+
+BINARY_INDICES = [PARAM_NAMES_SHORT.index(param) for param in BINARY_PARAMS]
+CONTINUOUS_INDICES = [
+    i for i in range(len(PARAM_NAMES_SHORT)) if i not in BINARY_INDICES
 ]
 
 # Projection and grid
@@ -83,6 +93,7 @@ SAMPLE_LEN = {
     "test": 32,
 }
 
+SECONDS_PER_STEP = 10
 
 # Log prediction error for these lead times
 VAL_STEP_LOG_ERRORS = np.array([1, 2, 3])

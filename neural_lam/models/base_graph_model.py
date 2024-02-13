@@ -2,7 +2,7 @@
 import torch
 
 # First-party
-from neural_lam import utils
+from neural_lam import constants, utils
 from neural_lam.interaction_net import InteractionNet
 from neural_lam.models.ar_model import ARModel
 
@@ -169,4 +169,11 @@ class BaseGraphModel(ARModel):
         )
 
         # Residual connection for full state
-        return prev_state + rescaled_delta_mean, pred_std
+        pred_state = prev_state + rescaled_delta_mean
+
+        # Scale binary logits to probabilities
+        pred_state[..., constants.BINARY_INDICES] = torch.nn.functional.sigmoid(
+            pred_state[..., constants.BINARY_INDICES]
+        )
+
+        return pred_state, pred_std

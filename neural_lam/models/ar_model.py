@@ -61,8 +61,9 @@ class ARModel(pl.LightningModule):
         ) = self.grid_static_features.shape  # 274776 = 428x642
         self.grid_dim = 2 * constants.GRID_STATE_DIM + grid_static_dim
 
-        # Instantiate loss function
+        # Instantiate loss functions
         self.loss = metrics.get_metric(args.loss)
+        self.binary_loss = metrics.get_metric(args.binary_loss)
 
         # Pre-compute space mask for use in loss function
         self.register_buffer(
@@ -76,6 +77,8 @@ class ARModel(pl.LightningModule):
         self.test_metrics = {
             "rmse": [],
             "mae": [],
+            "bce": [],
+            "bce_dice": [],
         }
         if self.output_std:
             self.test_metrics["output_std"] = []  # Treat as metric
@@ -193,10 +196,34 @@ class ARModel(pl.LightningModule):
         """
         prediction, target, pred_std = self.common_step(batch)
 
-        # Compute loss
-        batch_loss = torch.mean(
-            self.loss(prediction, target, pred_std, mask=self.space_mask_bool)
+        # Compute loss for continuous variables
+        continuous_pred = prediction[..., constants.CONTINUOUS_INDICES]
+        continuous_target = target[..., constants.CONTINUOUS_INDICES]
+        continuous_pred_std = pred_std[..., constants.CONTINUOUS_INDICES]
+        continuous_loss = torch.mean(
+            self.loss(
+                continuous_pred,
+                continuous_target,
+                continuous_pred_std,
+                mask=self.space_mask_bool,
+            )
         )  # mean over unrolled times and batch
+
+        # Compute loss for binary variables
+        binary_pred = prediction[..., constants.BINARY_INDICES]
+        binary_target = target[..., constants.BINARY_INDICES]
+        binary_pred_std = pred_std[..., constants.BINARY_INDICES]
+        binary_loss = torch.mean(
+            self.binary_loss(
+                binary_pred,
+                binary_target,
+                binary_pred_std,
+                mask=self.space_mask_bool,
+            )
+        )  # mean over unrolled times and batch
+
+        # Combine losses
+        batch_loss = continuous_loss + binary_loss
 
         log_dict = {"train_loss": batch_loss}
         self.log_dict(
@@ -221,10 +248,35 @@ class ARModel(pl.LightningModule):
         """
         prediction, target, pred_std = self.common_step(batch)
 
-        time_step_loss = torch.mean(
-            self.loss(prediction, target, pred_std, mask=self.space_mask_bool),
+        # Compute loss for continuous variables
+        continuous_pred = prediction[..., constants.CONTINUOUS_INDICES]
+        continuous_target = target[..., constants.CONTINUOUS_INDICES]
+        continuous_pred_std = pred_std[..., constants.CONTINUOUS_INDICES]
+        continuous_time_step_loss = torch.mean(
+            self.loss(
+                continuous_pred,
+                continuous_target,
+                continuous_pred_std,
+                mask=self.space_mask_bool,
+            ),
             dim=0,
         )  # (time_steps-1)
+
+        # Compute loss for binary variables
+        binary_pred = prediction[..., constants.BINARY_INDICES]
+        binary_target = target[..., constants.BINARY_INDICES]
+        binary_pred_std = pred_std[..., constants.BINARY_INDICES]
+        binary_time_step_loss = torch.mean(
+            self.binary_loss(
+                binary_pred,
+                binary_target,
+                binary_pred_std,
+                mask=self.space_mask_bool,
+            ),
+            dim=0,
+        )  # (time_steps-1)
+
+        time_step_loss = continuous_time_step_loss + binary_time_step_loss
         mean_loss = torch.mean(time_step_loss)
 
         # Log loss per time step forward and mean
@@ -266,10 +318,35 @@ class ARModel(pl.LightningModule):
         # prediction: (B, pred_steps, num_grid_nodes, d_f)
         # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
 
-        time_step_loss = torch.mean(
-            self.loss(prediction, target, pred_std, mask=self.space_mask_bool),
+        # Compute loss for continuous variables
+        continuous_pred = prediction[..., constants.CONTINUOUS_INDICES]
+        continuous_target = target[..., constants.CONTINUOUS_INDICES]
+        continuous_pred_std = pred_std[..., constants.CONTINUOUS_INDICES]
+        continuous_time_step_loss = torch.mean(
+            self.loss(
+                continuous_pred,
+                continuous_target,
+                continuous_pred_std,
+                mask=self.space_mask_bool,
+            ),
             dim=0,
-        )  # (time_steps-1,)
+        )  # (time_steps-1)
+
+        # Compute loss for binary variables
+        binary_pred = prediction[..., constants.BINARY_INDICES]
+        binary_target = target[..., constants.BINARY_INDICES]
+        binary_pred_std = pred_std[..., constants.BINARY_INDICES]
+        binary_time_step_loss = torch.mean(
+            self.binary_loss(
+                binary_pred,
+                binary_target,
+                binary_pred_std,
+                mask=self.space_mask_bool,
+            ),
+            dim=0,
+        )  # (time_steps-1)
+
+        time_step_loss = continuous_time_step_loss + binary_time_step_loss
         mean_loss = torch.mean(time_step_loss)
 
         # Log loss per time step forward and mean
@@ -287,7 +364,16 @@ class ARModel(pl.LightningModule):
         # Note: explicitly list metrics here, as test_metrics can contain
         # additional ones, computed differently, but that should be aggregated
         # on_test_epoch_end
-        for metric_name in ("rmse", "mae"):
+        for metric_name in ("rmse", "mae", "bce", "bce_dice"):
+
+            if metric_name in ("bce", "bce_dice"):
+                prediction[..., constants.CONTINUOUS_INDICES] = torch.sigmoid(
+                    prediction[..., constants.CONTINUOUS_INDICES]
+                )
+                target[..., constants.CONTINUOUS_INDICES] = torch.sigmoid(
+                    target[..., constants.CONTINUOUS_INDICES]
+                )
+
             metric_func = metrics.get_metric(metric_name)
             batch_metric_vals = metric_func(
                 prediction,
@@ -306,9 +392,16 @@ class ARModel(pl.LightningModule):
             self.test_metrics["output_std"].append(mean_pred_std)
 
         # Save per-sample spatial loss for specific times
-        spatial_loss = self.loss(
-            prediction, target, pred_std, average_grid=False
+        continuous_spatial_loss = self.loss(
+            continuous_pred,
+            continuous_target,
+            continuous_pred_std,
+            average_grid=False,
         )  # (B, pred_steps, num_grid_nodes)
+        binary_spatial_loss = self.loss(
+            binary_pred, binary_target, binary_pred_std, average_grid=False
+        )  # (B, pred_steps, num_grid_nodes)
+        spatial_loss = continuous_spatial_loss + binary_spatial_loss
         log_spatial_losses = spatial_loss[:, constants.VAL_STEP_LOG_ERRORS - 1]
         self.spatial_loss_maps.append(log_spatial_losses)
         # (B, N_log, num_grid_nodes)
@@ -375,13 +468,19 @@ class ARModel(pl.LightningModule):
                 zip(pred_slice, target_slice), start=1
             ):
                 # Create one figure per variable at this time step
+                minutes = (
+                    t_i * self.step_length * constants.SECONDS_PER_STEP // 60
+                )
+                seconds = (
+                    t_i * self.step_length * constants.SECONDS_PER_STEP % 60
+                )
                 var_figs = [
                     vis.plot_prediction(
                         pred_t[:, var_i],
                         target_t[:, var_i],
                         self.space_mask[:, 0],
                         title=f"{var_name} ({var_unit}), "
-                        f"t={t_i} ({self.step_length*t_i} min)",
+                        f"t={t_i} ({minutes:02}m {seconds:02}s)",
                         vrange=var_vrange,
                     )
                     for var_i, (var_name, var_unit, var_vrange) in enumerate(
