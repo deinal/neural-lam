@@ -154,8 +154,8 @@ def main():
     parser.add_argument(
         "--binary_loss",
         type=str,
-        default="bce_dice",
-        help="Loss function to use, see metric.py (default: bce_dice)",
+        default="dice",
+        help="Loss function to use, see metric.py (default: dice)",
     )
     parser.add_argument(
         "--step_length",

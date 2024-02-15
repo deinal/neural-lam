@@ -78,7 +78,7 @@ class ARModel(pl.LightningModule):
             "rmse": [],
             "mae": [],
             "bce": [],
-            "bce_dice": [],
+            "dice": [],
         }
         if self.output_std:
             self.test_metrics["output_std"] = []  # Treat as metric
@@ -364,9 +364,9 @@ class ARModel(pl.LightningModule):
         # Note: explicitly list metrics here, as test_metrics can contain
         # additional ones, computed differently, but that should be aggregated
         # on_test_epoch_end
-        for metric_name in ("rmse", "mae", "bce", "bce_dice"):
+        for metric_name in ("rmse", "mae", "bce", "dice"):
 
-            if metric_name in ("bce", "bce_dice"):
+            if metric_name in ("bce", "dice"):
                 prediction[..., constants.CONTINUOUS_INDICES] = torch.sigmoid(
                     prediction[..., constants.CONTINUOUS_INDICES]
                 )

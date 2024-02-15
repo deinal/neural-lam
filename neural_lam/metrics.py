@@ -292,11 +292,11 @@ def bce(
     )
 
 
-def bce_dice(
-    pred, target, pred_std=None, mask=None, average_grid=True, sum_vars=True
+def dice(
+    pred, target, pred_std=None, mask=None, average_grid=False, sum_vars=True
 ):
     """
-    Combined Binary Cross-Entropy and Dice loss
+    Dice Loss
 
     pred: (..., N, d_state), prediction logits
     target: (..., N, d_state), target binary labels
@@ -312,23 +312,18 @@ def bce_dice(
     """
     pred_std = torch.ones_like(pred_std)
 
-    bce_loss = torch.nn.functional.binary_cross_entropy(
-        pred, target, reduction="none"
-    )
+    if mask is not None:
+        pred = pred[..., mask, :]  # (..., N', d_state)
+        target = target[..., mask, :]  # (..., N', d_state)
 
-    pred_flat = pred.view(-1)
-    target_flat = target.view(-1)
-    intersection = (pred_flat * target_flat).sum()
-    dice_loss = 1 - (2.0 * intersection) / (pred_flat.sum() + target_flat.sum())
+    intersection = (pred * target).sum(dim=2)  # sum over grid
+    total_positives = pred.sum(dim=2) + target.sum(dim=2)
 
-    entry_bce_dice = bce_loss + dice_loss
+    entry_dice = 1 - (2.0 * intersection) / total_positives
 
     return mask_and_reduce_metric(
-        entry_bce_dice,
-        mask=mask,
-        average_grid=average_grid,
-        sum_vars=sum_vars,
-    )
+        entry_dice, mask=None, average_grid=average_grid, sum_vars=sum_vars
+    )  # dice is masked before
 
 
 DEFINED_METRICS = {
@@ -340,5 +335,5 @@ DEFINED_METRICS = {
     "nll": nll,
     "crps_gauss": crps_gauss,
     "bce": bce,
-    "bce_dice": bce_dice,
+    "dice": dice,
 }
