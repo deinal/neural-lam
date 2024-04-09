@@ -97,6 +97,7 @@ SECONDS_PER_STEP = 10
 
 # Log prediction error for these lead times
 VAL_STEP_LOG_ERRORS = np.array([1, 2, 3])
+TEST_STEP_LOG_ERRORS = np.arange(1, 31)
 
 # Log these metrics to wandb as scalar values for
 # specific variables and lead times

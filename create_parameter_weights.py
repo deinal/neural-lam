@@ -51,8 +51,8 @@ def main():
     parser.add_argument(
         "--batch_size",
         type=int,
-        default=16,
-        help="Batch size when iterating over the dataset",
+        default=32,
+        help="Batch size when iterating over the dataset (default: 32)",
     )
     parser.add_argument(
         "--step_length",
@@ -63,8 +63,8 @@ def main():
     parser.add_argument(
         "--n_workers",
         type=int,
-        default=4,
-        help="Number of workers in data loader (default: 4)",
+        default=16,
+        help="Number of workers in data loader (default: 16)",
     )
     args = parser.parse_args()
 

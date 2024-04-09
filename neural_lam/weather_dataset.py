@@ -29,7 +29,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         subsample_step=3,
         standardize=True,
         subset=False,
-        control_only=False,
+        run_id=None,
     ):
         super().__init__()
 
@@ -38,7 +38,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             "data", dataset_name, "samples", split
         )
 
-        member_file_regexp = "BCQ*.npy" if control_only else "*.npy"
+        member_file_regexp = f"{run_id}*.npy" if run_id else "*.npy"
         sample_paths = glob.glob(
             os.path.join(self.sample_dir_path, member_file_regexp)
         )

@@ -139,11 +139,10 @@ def main():
         "(default: 1)",
     )
     parser.add_argument(
-        "--control_only",
-        type=int,
-        default=0,
-        help="Train only on control member of ensemble data "
-        "(default: 0 (False))",
+        "--run_id",
+        type=str,
+        default=None,
+        help="Run id to consider (default: no restrictions) " "(default: None)",
     )
     parser.add_argument(
         "--loss",
@@ -214,7 +213,7 @@ def main():
             split="train",
             subsample_step=args.step_length,
             subset=bool(args.subset_ds),
-            control_only=args.control_only,
+            run_id=args.run_id,
         ),
         args.batch_size,
         shuffle=True,
@@ -228,7 +227,7 @@ def main():
             split="val",
             subsample_step=args.step_length,
             subset=bool(args.subset_ds),
-            control_only=args.control_only,
+            run_id=args.run_id,
         ),
         args.batch_size,
         shuffle=False,
@@ -302,6 +301,7 @@ def main():
                     split="test",
                     subsample_step=args.step_length,
                     subset=bool(args.subset_ds),
+                    run_id=args.run_id,
                 ),
                 args.batch_size,
                 shuffle=False,

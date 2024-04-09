@@ -1,5 +1,6 @@
 # Standard library
 import os
+import time
 
 # Third-party
 import matplotlib.pyplot as plt
@@ -122,7 +123,7 @@ class ARModel(pl.LightningModule):
         """
         raise NotImplementedError("No prediction step implemented")
 
-    def unroll_prediction(self, init_states, true_states):
+    def unroll_prediction(self, init_states, true_states, time_pred=False):
         """
         Roll out prediction taking multiple autoregressive steps with model
         init_states: (B, 2, num_grid_nodes, d_f)
@@ -134,8 +135,14 @@ class ARModel(pl.LightningModule):
         pred_std_list = []
         pred_steps = true_states.shape[1]
 
+        if time_pred:
+            times = []
+
         for i in range(pred_steps):
             earth_state = true_states[:, i]
+
+            if time_pred:
+                start = time.time()
 
             pred_state, pred_std = self.predict_step(
                 prev_state,
@@ -143,6 +150,10 @@ class ARModel(pl.LightningModule):
             )
             # state: (B, num_grid_nodes, d_f)
             # pred_std: (B, num_grid_nodes, d_f) or None
+
+            if time_pred:
+                end = time.time()
+                times.append(end - start)
 
             # Overwrite earth with true state
             new_state = (
@@ -157,6 +168,14 @@ class ARModel(pl.LightningModule):
             prev_prev_state = prev_state
             prev_state = new_state
 
+        if time_pred:
+            with open(
+                os.path.join(wandb.run.dir, "inference_times.txt"),
+                mode="a",
+                encoding="utf-8",
+            ) as f:
+                np.savetxt(f, times)
+
         prediction = torch.stack(
             prediction_list, dim=1
         )  # (B, pred_steps, num_grid_nodes, d_f)
@@ -169,7 +188,7 @@ class ARModel(pl.LightningModule):
 
         return prediction, pred_std
 
-    def common_step(self, batch):
+    def common_step(self, batch, time_pred=False):
         """
         Predict on single batch
         batch = time_series
@@ -183,7 +202,7 @@ class ARModel(pl.LightningModule):
         ) = batch
 
         prediction, pred_std = self.unroll_prediction(
-            init_states, target_states
+            init_states, target_states, time_pred
         )  # (B, pred_steps, num_grid_nodes, d_f)
         # prediction: (B, pred_steps, num_grid_nodes, d_f)
         # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
@@ -314,7 +333,7 @@ class ARModel(pl.LightningModule):
         """
         Run test on single batch
         """
-        prediction, target, pred_std = self.common_step(batch)
+        prediction, target, pred_std = self.common_step(batch, time_pred=True)
         # prediction: (B, pred_steps, num_grid_nodes, d_f)
         # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
 
@@ -352,7 +371,7 @@ class ARModel(pl.LightningModule):
         # Log loss per time step forward and mean
         test_log_dict = {
             f"test_loss_unroll{step}": time_step_loss[step - 1]
-            for step in constants.VAL_STEP_LOG_ERRORS
+            for step in constants.TEST_STEP_LOG_ERRORS
         }
         test_log_dict["test_mean_loss"] = mean_loss
 
@@ -367,17 +386,23 @@ class ARModel(pl.LightningModule):
         for metric_name in ("rmse", "mae", "bce", "dice"):
 
             if metric_name in ("bce", "dice"):
-                prediction[..., constants.CONTINUOUS_INDICES] = torch.sigmoid(
-                    prediction[..., constants.CONTINUOUS_INDICES]
+                prediction_copy = prediction.clone()
+                target_copy = target.clone()
+
+                prediction_copy[..., constants.CONTINUOUS_INDICES] = (
+                    torch.sigmoid(prediction[..., constants.CONTINUOUS_INDICES])
                 )
-                target[..., constants.CONTINUOUS_INDICES] = torch.sigmoid(
+                target_copy[..., constants.CONTINUOUS_INDICES] = torch.sigmoid(
                     target[..., constants.CONTINUOUS_INDICES]
                 )
+            else:
+                prediction_copy = prediction.clone()
+                target_copy = target.clone()
 
             metric_func = metrics.get_metric(metric_name)
             batch_metric_vals = metric_func(
-                prediction,
-                target,
+                prediction_copy,
+                target_copy,
                 pred_std,
                 mask=self.space_mask_bool,
                 sum_vars=False,
@@ -402,7 +427,7 @@ class ARModel(pl.LightningModule):
             binary_pred, binary_target, binary_pred_std, average_grid=False
         )  # (B, pred_steps, num_grid_nodes)
         spatial_loss = continuous_spatial_loss + binary_spatial_loss
-        log_spatial_losses = spatial_loss[:, constants.VAL_STEP_LOG_ERRORS - 1]
+        log_spatial_losses = spatial_loss[:, constants.TEST_STEP_LOG_ERRORS - 1]
         self.spatial_loss_maps.append(log_spatial_losses)
         # (B, N_log, num_grid_nodes)
 
@@ -538,7 +563,7 @@ class ARModel(pl.LightningModule):
         full_log_name = f"{prefix}_{metric_name}"
         log_dict[full_log_name] = wandb.Image(metric_fig)
 
-        if prefix == "test":
+        if prefix.startswith("test"):
             # Save pdf
             metric_fig.savefig(
                 os.path.join(wandb.run.dir, f"{full_log_name}.pdf")
@@ -591,6 +616,26 @@ class ARModel(pl.LightningModule):
                     )
                 )
 
+                if prefix.startswith("test"):
+                    for sample_idx, metric_val in enumerate(
+                        metric_val_list, start=1
+                    ):
+                        sample_metric_tensor = (
+                            metric_val.squeeze()
+                        )  # (pred_steps, d_f)
+                        sample_metric_rescaled = (
+                            sample_metric_tensor * self.data_std
+                        )
+
+                        sample_log_name = f"{prefix}_s{sample_idx}"
+                        log_dict.update(
+                            self.create_metric_log_dict(
+                                sample_metric_rescaled,
+                                sample_log_name,
+                                metric_name,
+                            )
+                        )
+
         if self.trainer.is_global_zero and not self.trainer.sanity_checking:
             wandb.log(log_dict)  # Log all
             plt.close("all")  # Close all figs
@@ -608,41 +653,48 @@ class ARModel(pl.LightningModule):
             torch.cat(self.spatial_loss_maps, dim=0)
         )  # (N_test, N_log, num_grid_nodes)
         if self.trainer.is_global_zero:
-            mean_spatial_loss = torch.mean(
-                spatial_loss_tensor, dim=0
-            )  # (N_log, num_grid_nodes)
-
-            loss_map_figs = [
-                vis.plot_spatial_error(
-                    loss_map,
-                    self.space_mask[:, 0],
-                    title=f"Test loss, t={t_i} ({self.step_length*t_i} h)",
-                )
-                for t_i, loss_map in zip(
-                    constants.VAL_STEP_LOG_ERRORS, mean_spatial_loss
-                )
-            ]
-
-            # log all to same wandb key, sequentially
-            for fig in loss_map_figs:
-                wandb.log({"test_loss": wandb.Image(fig)})
-
-            # also make without title and save as pdf
-            pdf_loss_map_figs = [
-                vis.plot_spatial_error(loss_map, self.space_mask[:, 0])
-                for loss_map in mean_spatial_loss
-            ]
-            pdf_loss_maps_dir = os.path.join(wandb.run.dir, "spatial_loss_maps")
-            os.makedirs(pdf_loss_maps_dir, exist_ok=True)
-            for t_i, fig in zip(
-                constants.VAL_STEP_LOG_ERRORS, pdf_loss_map_figs
+            for sample_idx, spatial_loss in enumerate(
+                spatial_loss_tensor, start=1
             ):
-                fig.savefig(os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf"))
-            # save mean spatial loss as .pt file also
-            torch.save(
-                mean_spatial_loss.cpu(),
-                os.path.join(wandb.run.dir, "mean_spatial_loss.pt"),
-            )
+                loss_map_figs = [
+                    vis.plot_spatial_error(
+                        loss_map,
+                        self.space_mask[:, 0],
+                        title=f"Test loss, t={t_i}",
+                    )
+                    for t_i, loss_map in zip(
+                        constants.TEST_STEP_LOG_ERRORS, spatial_loss
+                    )
+                ]
+
+                # log all to same wandb key, sequentially
+                for fig in loss_map_figs:
+                    wandb.log({f"test_loss_{sample_idx}": wandb.Image(fig)})
+
+                # also make without title and save as pdf
+                pdf_loss_map_figs = [
+                    vis.plot_spatial_error(loss_map, self.space_mask[:, 0])
+                    for loss_map in spatial_loss
+                ]
+                pdf_loss_maps_dir = os.path.join(
+                    wandb.run.dir, "spatial_loss_maps"
+                )
+                os.makedirs(pdf_loss_maps_dir, exist_ok=True)
+                for t_i, fig in zip(
+                    constants.TEST_STEP_LOG_ERRORS, pdf_loss_map_figs
+                ):
+                    fig.savefig(
+                        os.path.join(
+                            pdf_loss_maps_dir, f"loss_s{sample_idx}_t{t_i}.pdf"
+                        )
+                    )
+                # save mean spatial loss as .pt file also
+                torch.save(
+                    spatial_loss.cpu(),
+                    os.path.join(
+                        wandb.run.dir, f"s{sample_idx}_spatial_loss.pt"
+                    ),
+                )
 
         self.spatial_loss_maps.clear()
 
